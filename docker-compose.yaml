@@ -1,0 +1,83 @@
+version: "3.9"
+
+services:
+  frontend:
+    image: thraikal/frontend:latest
+    restart: always
+      #ports:
+      #- 3000:3000
+    networks:
+      # - traefik_network
+      # - frontend_network
+      nn:
+        ipv4_address: 172.18.0.4
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`fl-13-138.zhdk.cloud.switch.ch`) && PathPrefix(`/`)"
+      - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.services.frontend.loadbalancer.server.port=3000"
+      - "traefik.http.middlewares.websocket.headers.customRequestHeaders.Sec-WebSocket-Version=13"
+    depends_on:
+      - backend
+  backend:
+    image: thraikal/backend:latest
+    restart: always
+    ports:
+      - 3001:3001
+    networks:
+      # - frontend_network
+      # - backend_network
+      nn:
+        ipv4_address: 172.18.0.3
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.entrypoints=websockets"
+      - "traefik.http.services.backend.loadbalancer.server.port=3001"
+      - "traefik.http.middlewares.backend.headers.accesscontrolalloworiginlist=*"
+    depends_on:
+      - mongodb
+  mongodb:
+    image: mongo:latest
+    restart: always
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      # - backend_network
+      nn:
+        ipv4_address: 172.18.0.2
+    healthcheck:
+      test: ["CMD", "mongo", "--eval", "db.runCommand('ping').ok"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  traefik:
+    image: traefik:v2.5
+    restart: always
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./traefik-data:/data"
+      - "./traefik-conf:/conf"
+    networks:
+      nn:
+        ipv4_address: 172.18.0.5
+    command:
+      - "--entrypoints.web.address=:80"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--api=true"
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+
+volumes:
+  mongodb_data:
+
+networks:
+  nn:
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.18.0.0/16
