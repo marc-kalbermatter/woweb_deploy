@@ -4,17 +4,13 @@ services:
   frontend:
     image: thraikal/frontend:latest
     restart: always
-      #ports:
-      #- 3000:3000
     networks:
-      # - traefik_network
-      # - frontend_network
       nn:
         ipv4_address: 172.18.0.4
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.frontend.rule=Host(`fl-13-138.zhdk.cloud.switch.ch`) && PathPrefix(`/`)"
-      - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
       - "traefik.http.services.frontend.loadbalancer.server.port=3000"
       - "traefik.http.middlewares.websocket.headers.customRequestHeaders.Sec-WebSocket-Version=13"
     depends_on:
@@ -25,8 +21,6 @@ services:
     ports:
       - 3001:3001
     networks:
-      # - frontend_network
-      # - backend_network
       nn:
         ipv4_address: 172.18.0.3
     labels:
@@ -42,7 +36,6 @@ services:
     volumes:
       - mongodb_data:/data/db
     networks:
-      # - backend_network
       nn:
         ipv4_address: 172.18.0.2
     healthcheck:
@@ -50,28 +43,33 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-
   traefik:
     image: traefik:v2.5
     restart: always
     ports:
       - "80:80"
+      - "443:443"
       - "8080:8080"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
       - "./traefik-data:/data"
       - "./traefik-conf:/conf"
+      - "./certs:/certs"  # Path to your SSL certificates
     networks:
       nn:
         ipv4_address: 172.18.0.5
     command:
       - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--api=true"
       - "--api.dashboard=true"
       - "--api.insecure=true"
-
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"  # Resolver for Let's Encrypt
+      - "--certificatesresolvers.myresolver.acme.email=marc.kalbermatter@students.fhnw.ch"  # Your email here
+      - "--certificatesresolvers.myresolver.acme.storage=/certs/acme.json"  # Storage for Let's Encrypt data
 volumes:
   mongodb_data:
 
